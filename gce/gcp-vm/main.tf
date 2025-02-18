@@ -34,7 +34,7 @@ resource "google_compute_instance" "my_first_vm" {
 
   metadata_startup_script = <<-EOT
               #!/bin/bash
-              sudo su
+              # sudo su
               apt update
               apt install -y apache2
               # ls /var/www/html
