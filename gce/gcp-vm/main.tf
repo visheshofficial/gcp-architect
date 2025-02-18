@@ -5,6 +5,14 @@ provider "google" {
   region  = var.region
 }
 
+# Create a static IP address
+resource "google_compute_address" "static_ip" {
+  name   = "my-static-ip"
+  region = var.region
+}
+
+
+# Create a Google Compute Engine instance
 resource "google_compute_instance" "my_first_vm" {
   name         = "my-first-vm"
   machine_type = var.machine_type
@@ -20,7 +28,7 @@ resource "google_compute_instance" "my_first_vm" {
   network_interface {
     network = "default"
     access_config {
-      // Ephemeral IP
+      nat_ip = google_compute_address.static_ip.address
     }
   }
 
@@ -41,6 +49,7 @@ resource "google_compute_instance" "my_first_vm" {
               EOT
 }
 
+# Create a firewall rule to allow HTTP traffic
 resource "google_compute_firewall" "default" {
   name    = "allow-http"
   network = "default"
