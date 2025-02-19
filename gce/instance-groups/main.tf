@@ -5,12 +5,7 @@ provider "google" {
   region  = var.region
 }
 
-# Create a static IP address
-resource "google_compute_address" "static_ip" {
-  count  = var.create_static_ip ? 1 : 0
-  name   = "my-static-ip"
-  region = var.region
-}
+
 
 # Create an instance template
 resource "google_compute_instance_template" "instance_template" {
@@ -27,9 +22,8 @@ resource "google_compute_instance_template" "instance_template" {
 
   network_interface {
     network = "default"
-    access_config {
-      nat_ip = var.create_static_ip ? google_compute_address.static_ip[0].address : null
-    }
+    # access_config {
+    # }
   }
 
   metadata_startup_script = <<-EOT
@@ -57,9 +51,8 @@ resource "google_compute_instance_template" "instance_template_bye" {
 
   network_interface {
     network = "default"
-    access_config {
-      nat_ip = var.create_static_ip ? google_compute_address.static_ip[0].address : null
-    }
+    # access_config {
+    # }
   }
 
   metadata_startup_script = <<-EOT
@@ -73,7 +66,6 @@ resource "google_compute_instance_template" "instance_template_bye" {
 }
 # Create a managed instance group using the instance template
 resource "google_compute_instance_group_manager" "instance_group_manager" {
-  count              = var.create_template_vm ? 1 : 0
   name               = "my-instance-group"
   base_instance_name = "my-instance"
   zone               = var.zone
@@ -83,13 +75,13 @@ resource "google_compute_instance_group_manager" "instance_group_manager" {
     instance_template = google_compute_instance_template.instance_template.id
   }
 
-  version {
-    instance_template = google_compute_instance_template.instance_template_bye.id
-    name              = "new-template-bye"
-    target_size {
-      fixed = 1
-    }
-  }
+  # version {
+  #   instance_template = google_compute_instance_template.instance_template_bye.id
+  #   name              = "new-template-bye"
+  #   target_size {
+  #     fixed = 1
+  #   }
+  # }
   update_policy {
     type                  = "PROACTIVE"
     minimal_action        = "REPLACE"
@@ -128,11 +120,11 @@ resource "google_compute_autoscaler" "instance_group_autoscaler" {
   depends_on = [google_compute_instance_group_manager.instance_group_manager]
   name       = "my-instance-group-autoscaler"
   zone       = var.zone
-  target     = google_compute_instance_group_manager.instance_group_manager[0].id
+  target     = google_compute_instance_group_manager.instance_group_manager.id
 
   autoscaling_policy {
-    max_replicas    = 1
-    min_replicas    = 1
+    max_replicas    = 4
+    min_replicas    = 3
     cooldown_period = 60
 
     cpu_utilization {
@@ -142,45 +134,41 @@ resource "google_compute_autoscaler" "instance_group_autoscaler" {
 
 }
 
+# Create a backend service
+resource "google_compute_backend_service" "default" {
+  name        = "my-instance-group-backend-service"
+  port_name   = "http"
+  protocol    = "HTTP"
+  timeout_sec = 10
 
+  health_checks = [google_compute_health_check.default.id]
 
-# Create a Google Compute Engine instance
-resource "google_compute_instance" "my_first_vm" {
-  count        = var.create_standalone_vm ? 1 : 0
-  name         = "my-first-vm"
-  machine_type = var.machine_type
-  zone         = var.zone
-  tags         = ["http-server"]
-
-  boot_disk {
-    initialize_params {
-      image = "debian-cloud/debian-12"
-    }
+  backend {
+    group           = google_compute_instance_group_manager.instance_group_manager.instance_group
+    balancing_mode  = "UTILIZATION"
+    max_utilization = 0.8
   }
-
-  network_interface {
-    network = "default"
-    access_config {
-      nat_ip = var.create_static_ip ? google_compute_address.static_ip[0].address : null
-    }
-  }
-
-  metadata_startup_script = <<-EOT
-              #!/bin/bash
-              # sudo su
-              apt update
-              apt install -y apache2
-              # ls /var/www/html
-              # echo "Hello World!"
-              # echo "Hello World!" > /var/www/html/index.html
-              # echo $(hostname)
-              # echo $(hostname -i)
-              # echo "Hello World from $(hostname)"
-              # echo "Hello World from $(hostname) $(hostname -i)"
-              echo "Hello world from $(hostname) $(hostname -i)" > /var/www/html/index.html
-              sudo service apache2 start
-              EOT
 }
+
+# Create a URL map
+resource "google_compute_url_map" "default" {
+  name            = "my-url-map"
+  default_service = google_compute_backend_service.default.id
+}
+
+# Create a target HTTP proxy
+resource "google_compute_target_http_proxy" "default" {
+  name    = "my-http-proxy"
+  url_map = google_compute_url_map.default.id
+}
+
+# Create a global forwarding rule
+resource "google_compute_global_forwarding_rule" "default" {
+  name       = "my-forwarding-rule"
+  target     = google_compute_target_http_proxy.default.id
+  port_range = "80"
+}
+
 
 # Create a firewall rule to allow HTTP traffic
 resource "google_compute_firewall" "default" {
