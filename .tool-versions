@@ -1,2 +1,4 @@
 terraform 1.10.5
 gcloud 510.0.0
+kubectx 0.9.5
+kubectl 1.32.2
