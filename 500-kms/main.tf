@@ -39,7 +39,7 @@ resource "google_kms_crypto_key" "my_first_key" {
   rotation_period = "86400s" # Minimum rotation period is 1 day (86400 seconds)
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 
   version_template {
